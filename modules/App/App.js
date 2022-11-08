@@ -2,6 +2,7 @@ import { AugustComponent, renderer } from "../lib/August.mjs"
 
 const getHeader = async () => await (await import("./Header.js")).Header
 
+/** @type {AugustFunctionalComponent} */
 function App(state) {
     // Business logic
 

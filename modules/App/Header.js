@@ -1,5 +1,5 @@
+/** @type {AugustFunctionalComponent} */
 export function Header(state) {
-    
     state.watch(["something"], ([something]) => {
         console.log("🚀 ~ state.watch ~ something", something)
     })

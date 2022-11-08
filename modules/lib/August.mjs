@@ -1,10 +1,16 @@
+// @ts-check
+/// <reference path="../../types/August.d.ts" />
+
 //https://stackoverflow.com/questions/2559318/how-to-check-for-an-undefined-or-null-variable-in-javascript
+/** @type {isCheck} */
 const isNil = (test) => test == null
 
 //https://stackoverflow.com/questions/31538010/test-if-a-variable-is-a-primitive-rather-than-an-object
+/** @type {isCheck} */
 const isPrimitive = (test) => test !== Object(test)
 
 //https://stackoverflow.com/questions/5999998/check-if-a-variable-is-of-function-type
+/** @type {isCheck} */
 function isFunction(functionToCheck) {
     return (
         functionToCheck &&
@@ -13,12 +19,17 @@ function isFunction(functionToCheck) {
 }
 
 //https://stackoverflow.com/questions/57556471/convert-kebab-case-to-camelcase-with-javascript
+/** @type {stringCb} */
 const camelize = (s) => s.replace(/-./g, (x) => x[1].toUpperCase())
 
+/** @type {splitPath} */
 const splitPath = (path) => path.split(/[\.\[\]'"\?]/).filter((a) => a.trim())
+
+/** @type {normalizePath} */
 const normalizePath = (path) =>
     (Array.isArray(path) ? path : splitPath(path)).join(".")
 
+/** @type {getCb} */
 function get(obj, path) {
     if (isNil(obj)) return obj
     if (obj instanceof AugustState) return obj.get(path)
@@ -28,6 +39,7 @@ function get(obj, path) {
     return get(obj[prop], rest)
 }
 
+/** @type {setCb} */
 function set(obj, path, value) {
     if (obj instanceof AugustState) return obj.set(path, value)
     if (!Array.isArray(path)) return set(obj, splitPath(path), value)
@@ -39,40 +51,35 @@ function set(obj, path, value) {
     return set(obj[prop], rest, value)
 }
 
+/** @type {Set<Function>} */
 let watchCallbacks = new Set()
+let isMicrotaskAdded = false
 function addCb(cb) {
     watchCallbacks.add(cb)
+    if (isMicrotaskAdded) return
+    isMicrotaskAdded = true
     queueMicrotask(() => {
+        isMicrotaskAdded = false
         let temp = watchCallbacks
         watchCallbacks = new Set()
         temp.forEach((cb) => cb())
     })
 }
 
-class AugustCancel {
-    isCancelled = false
-    #cbs = []
-    onCancel(cb) {
-        if (this.isCancelled) return cb()
-        this.#cbs.push(cb)
-    }
-    cancel() {
-        this.isCancelled = true
-        this.#cbs.forEach((cb) => cb())
-        this.#cbs = []
-        return new AugustCancel()
-    }
-}
-
 let idc = 0
 export class AugustState {
     #state = {}
+
+    /** @type {Map<number, AugustWatch>} */
     #watches = new Map()
 
+    /** @type {AugustGetCb} */
     get = (path) => get(this.#state, path)
 
+    /** @type {AugustGetStateCb} */
     getState = (...paths) => paths.map((path) => this.get(path))
 
+    /** @type {AugustSetCb} */
     set(path, value) {
         set(this.#state, path, value)
         if (value instanceof AugustState) {
@@ -83,9 +90,11 @@ export class AugustState {
         this.#trigger(normalizePath(path))
     }
 
+    /** @type {AugustSetStateCb} */
     setState = (obj) =>
         Object.keys(obj).forEach((path) => this.set(path, obj[path]))
 
+    /** @type {AugustTriggerCb} */
     #trigger = (path) => {
         this.#watches.forEach((watch) => {
             if (watch.path == "") return watch.callback(path)
@@ -95,14 +104,16 @@ export class AugustState {
         })
     }
 
+    /** @type {AugustWatchCb} */
     watch([...paths], callback) {
-        let signal = new AugustCancel()
+        let controller = new AbortController()
         let cb = () => {
             let values = this.getState(...paths)
             let isValid = (val, i) => paths[i].endsWith("?") || !isNil(val)
             if (values.every(isValid)) {
-                signal = signal.cancel()
-                callback(values, signal)
+                controller.abort()
+                controller = new AbortController()
+                callback(values, controller.signal)
             }
         }
         let watches = paths.map((path) => {
@@ -113,12 +124,13 @@ export class AugustState {
         addCb(cb)
 
         return () => {
-            signal.cancel()
+            controller.abort()
             watches.forEach((watch) => this.#watches.delete(watch.id))
         }
     }
 }
 
+/** @type {renderer} */
 export async function renderer({
     getComponent,
     srcElement = document.createElement("div"),
@@ -152,7 +164,9 @@ export async function renderer({
     srcElement.appendChild(style)
 }
 
+/** @type {AugustBinder[]} */
 let binders = []
+/** @type {(binder: AugustBinder) => void} */
 export function addBinder({ regex, callback }) {
     binders.push({ regex, callback })
 }
@@ -221,6 +235,7 @@ export class AugustComponent extends AugustState {
         this.#getComponent = getComponent
     }
 
+    /** @type {AugustComponentRender} */
     async render(srcElement) {
         renderer({
             getComponent: this.#getComponent,
