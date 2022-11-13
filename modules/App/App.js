@@ -1,3 +1,4 @@
+// @ts-check
 import { AugustComponent, renderer } from "../lib/August.mjs"
 
 const getHeader = async () => await (await import("./Header.js")).Header
@@ -37,4 +38,5 @@ function App(state) {
     }
 }
 
-renderer({ getComponent: () => App, srcElement: document.body })
+let AppComponent = new AugustComponent(() => App)
+AppComponent.render(document.body)

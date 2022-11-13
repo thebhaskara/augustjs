@@ -1,3 +1,5 @@
+// @ts-check
+
 /** @type {AugustFunctionalComponent} */
 export function Header(state) {
     state.watch(["something"], ([something]) => {
@@ -14,5 +16,6 @@ export function Header(state) {
             btn click</button>
         </form>
         `,
+        css: "",
     }
 }
