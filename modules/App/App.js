@@ -38,5 +38,5 @@ function App(state) {
     }
 }
 
-let AppComponent = new AugustComponent(() => App)
+export let AppComponent = new AugustComponent(() => App)
 AppComponent.render(document.body)
