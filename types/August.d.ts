@@ -27,38 +27,40 @@ type AugustWatchCb = (
 ) => Function
 
 interface AugustWatch {
-    id: number
+	id: number
 	validate: Function
-    cb: Function
+	cb: Function
 	callback: Function | null
-    path: string
+	path: string
 }
 
 interface AugustRendererInput {
-    getComponent: () => Promise<Function>
-    srcElement: HTMLElement
-    state: import("../modules/lib/August.mjs").AugustState
+	getComponent: () => Promise<Function>
+	srcElement: HTMLElement
+	state: import("../modules/lib/August.mjs").AugustState
 }
 
-type renderer = (input: AugustRendererInput) => Promise<void>
+type renderer = (
+	input: AugustRendererInput
+) => Promise<[Element[], HTMLStyleElement]>
 
 interface AugustBinderCallbackInput {
-    element: Element
-    attribute: Attr
-    match: string[]
-    state: import("../modules/lib/August.mjs").AugustState
+	element: Element
+	attribute: Attr
+	match: string[]
+	state: import("../modules/lib/August.mjs").AugustState
 }
 
 interface AugustBinder {
-    regex: RegExp
-    callback: (input: AugustBinderCallbackInput) => void
+	regex: RegExp
+	callback: (input: AugustBinderCallbackInput) => void
 }
 
 type AugustComponentRender = (srcElement: HTMLElement) => Promise<void>
 
 type AugustFunctionalComponent = (
-    state: import("../modules/lib/August.mjs").AugustState
+	state: import("../modules/lib/August.mjs").AugustState
 ) => {
-    html: string
-    css: string
+	html: string
+	css: string
 }
