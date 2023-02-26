@@ -83,8 +83,9 @@ export class AugustState {
     set(path, value) {
         set(this.#state, path, value)
         if (value instanceof AugustState) {
-            value.watch([""], (p2) => {
+			value.watch(["*"], null, (_values, _paths, p2) => {
                 this.#trigger(normalizePath(`${path}.${p2}`))
+				return false
             })
         }
         this.#trigger(normalizePath(path))
@@ -97,34 +98,49 @@ export class AugustState {
     /** @type {AugustTriggerCb} */
     #trigger = (path) => {
         this.#watches.forEach((watch) => {
-            if (watch.path == "") return watch.callback(path)
-            if (path == watch.path) return addCb(watch.cb)
-            if (path.startsWith(watch.path + ".")) return addCb(watch.cb)
-            if (watch.path.startsWith(path + ".")) return addCb(watch.cb)
+			if (watch.path == "*") return watch.validate(path)
+			if (path == watch.path) return watch.validate(path)
+			if (path.startsWith(watch.path + ".")) return watch.validate(path)
+			if (watch.path.startsWith(path + ".")) return watch.validate(path)
         })
     }
 
     /** @type {AugustWatchCb} */
-    watch([...paths], callback) {
+	watch([...paths], callback, checkCallback) {
+		let validate = (currentPath) => {
+			let values = this.getState(...paths)
+			let isValid =
+				checkCallback ??
+				(() =>
+					values.every(
+						(val, i) => paths[i].endsWith("?") || !isNil(val)
+					))
+			if (isValid(values, paths, currentPath)) {
+				callback && addCb(cb)
+			}
+		}
         let controller = new AbortController()
         let cb = async () => {
             let values = this.getState(...paths)
-            let isValid = (val, i) => paths[i].endsWith("?") || !isNil(val)
-            if (values.every(isValid)) {
                 controller.abort()
                 controller = new AbortController()
-                let result = await callback(values, controller.signal)
+			let result = await callback?.(values, paths, controller.signal)
                 if (result) {
                     this.setState(result)
                 }
             }
-        }
         let watches = paths.map((path) => {
-            let watch = { id: idc++, cb, callback, path: normalizePath(path) }
+			let watch = {
+				id: idc++,
+				cb,
+				callback,
+				validate,
+				path: normalizePath(path),
+			}
             this.#watches.set(watch.id, watch)
             return watch
         })
-        addCb(cb)
+		validate()
 
         return () => {
             controller.abort()

@@ -1,6 +1,6 @@
 Features or functionalities list:
     ✔ Testing setup @started(22-11-17 21:48) @done(22-11-17 23:56) @lasted(2h8m25s)
-    ☐ watch should have sync and async options
+    ✔ watch should have sync and async options @done(23-02-26 17:43)
     ✔ watch callback return value should be used in setState @done(23-02-26 13:36)
     ☐ Destroy functionality
     ☐ components binder

@@ -16,12 +16,21 @@ type AugustGetStateCb = (...paths: pathLike[]) => any[]
 type AugustSetCb = (path: pathLike, value: any) => void
 type AugustSetStateCb = (state: any) => void
 type AugustTriggerCb = (path: string) => void
-type AugustWatchCb = (paths: string[], callback: Function) => Function
+type AugustWatchCb = (
+	paths: string[],
+	callback: Function | null,
+	checkCallback?: (
+		values: any[],
+		paths: string[],
+		curentPath: string
+	) => boolean
+) => Function
 
 interface AugustWatch {
     id: number
+	validate: Function
     cb: Function
-    callback: Function
+	callback: Function | null
     path: string
 }
 
