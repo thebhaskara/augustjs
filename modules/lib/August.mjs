@@ -107,13 +107,16 @@ export class AugustState {
     /** @type {AugustWatchCb} */
     watch([...paths], callback) {
         let controller = new AbortController()
-        let cb = () => {
+        let cb = async () => {
             let values = this.getState(...paths)
             let isValid = (val, i) => paths[i].endsWith("?") || !isNil(val)
             if (values.every(isValid)) {
                 controller.abort()
                 controller = new AbortController()
-                callback(values, controller.signal)
+                let result = await callback(values, controller.signal)
+                if (result) {
+                    this.setState(result)
+                }
             }
         }
         let watches = paths.map((path) => {
