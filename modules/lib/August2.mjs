@@ -1,5 +1,5 @@
 // @ts-check
-/// <reference path="../../types/August.d.ts" />
+/// <reference path="../../types/August2.d.ts" />
 
 //https://stackoverflow.com/questions/2559318/how-to-check-for-an-undefined-or-null-variable-in-javascript
 /** @type {isCheck} */
@@ -25,14 +25,10 @@ const camelize = (s) => s.replace(/-./g, (x) => x[1].toUpperCase())
 /** @type {splitPath} */
 const splitPath = (path) => path.split(/[\.\[\]'"\?]/).filter((a) => a.trim())
 
-/** @type {normalizePath} */
-const normalizePath = (path) =>
-	(Array.isArray(path) ? path : splitPath(path)).join(".")
-
 /** @type {getCb} */
 function get(obj, path) {
 	if (isNil(obj)) return obj
-	if (obj instanceof AugustState) return obj.get(path)
+	// if (obj instanceof AugustState) return obj.get(path)
 	if (!Array.isArray(path)) return get(obj, splitPath(path))
 	let [prop, ...rest] = path
 	if (rest.length == 0) return obj[prop]
@@ -51,112 +47,100 @@ function set(obj, path, value) {
 	return set(obj[prop], rest, value)
 }
 
+/**
+ *
+ *
+ * @template Type
+ * @param {Promise<Type> | Type} [defaultValue]
+ * @return
+ */
+export function prop(defaultValue) {
+	/** @type {Type | undefined} */
+	let value
+	if (defaultValue instanceof Promise) {
+		defaultValue.then((value) => (valueSet.value = value))
+	} else {
+		value = defaultValue
+	}
+	/** @type {Set<Function>} */
+	let callbacks = new Set()
+	let valueSet = {
+		get value() {
+			autoWatchStack.at(-1)?.(valueSet)
+			return value
+		},
+		set value(val) {
+			value = val
+			queueCallbacks(callbacks)
+		},
+		watch(callback, silent) {
+			callbacks.add(callback)
+			if (!silent) queueCallbacks([callback])
+			return () => {
+				callbacks.delete(callback)
+				callbackQueue.delete(callback)
+			}
+		},
+	}
+	return valueSet
+}
+
 /** @type {Set<Function>} */
-let watchCallbacks = new Set()
-let isMicrotaskAdded = false
-function addCb(cb) {
-	watchCallbacks.add(cb)
-	if (isMicrotaskAdded) return
-	isMicrotaskAdded = true
+let callbackQueue = new Set()
+
+let processCallbackQueue = () => {
 	queueMicrotask(() => {
-		isMicrotaskAdded = false
-		let temp = watchCallbacks
-		watchCallbacks = new Set()
-		temp.forEach((cb) => cb())
+		if (callbackQueue.size === 0) return
+		callbackQueue.forEach((callback) => callback?.())
+		callbackQueue = new Set()
 	})
 }
 
-let idc = 0
-export class AugustState {
-	#state = {}
-
-	/** @type {Map<number, AugustWatch>} */
-	#watches = new Map()
-
-	/** @type {AugustGetCb} */
-	get = (path) => get(this.#state, path)
-
-	/** @type {AugustGetStateCb} */
-	getState = (...paths) => paths.map((path) => this.get(path))
-
-	/** @type {AugustSetCb} */
-	set(path, value) {
-		set(this.#state, path, value)
-		if (value instanceof AugustState) {
-			value.watch(["*"], null, (_values, _paths, p2) => {
-				this.#trigger(normalizePath(`${path}.${p2}`))
-				return false
-			})
-		}
-		this.#trigger(normalizePath(path))
-	}
-
-	/** @type {AugustSetStateCb} */
-	setState = (obj) =>
-		Object.keys(obj).forEach((path) => this.set(path, obj[path]))
-
-	/** @type {AugustTriggerCb} */
-	#trigger = (path) => {
-		this.#watches.forEach((watch) => {
-			if (watch.path == "*") return watch.validate(path)
-			if (path == watch.path) return watch.validate(path)
-			if (path.startsWith(watch.path + ".")) return watch.validate(path)
-			if (watch.path.startsWith(path + ".")) return watch.validate(path)
-		})
-	}
-
-	/** @type {AugustWatchCb} */
-	watch([...paths], callback, checkCallback) {
-		let validate = (currentPath) => {
-			let values = this.getState(...paths)
-			let isValid =
-				checkCallback ??
-				(() =>
-					values.every(
-						(val, i) => paths[i].endsWith("?") || !isNil(val)
-					))
-			if (isValid(values, paths, currentPath)) {
-				callback && addCb(cb)
-			}
-		}
-		let controller = new AbortController()
-		let cb = async () => {
-			let values = this.getState(...paths)
-			controller.abort()
-			controller = new AbortController()
-			let result = await callback?.(values, paths, controller.signal)
-			if (result) {
-				this.setState(result)
-			}
-		}
-		let watches = paths.map((path) => {
-			let watch = {
-				id: idc++,
-				cb,
-				callback,
-				validate,
-				path: normalizePath(path),
-			}
-			this.#watches.set(watch.id, watch)
-			return watch
-		})
-		validate()
-
-		return () => {
-			controller.abort()
-			watches.forEach((watch) => this.#watches.delete(watch.id))
-		}
+/**
+ * @param {Function[] | Set<Function>} callbacks
+ */
+export function queueCallbacks(callbacks) {
+	let { size } = callbackQueue
+	callbacks.forEach((callback) => callbackQueue.add(callback))
+	if (callbackQueue.size > size) {
+		processCallbackQueue()
 	}
 }
 
-/** @type {renderer} */
-export async function renderer({
-	getComponent,
-	srcElement = document.createElement("div"),
-	state = new AugustState(),
-}) {
+let autoWatchStack = []
+export function autoWatch(callback) {
+	let unwatches = []
+	let cb = () => {
+		unwatches.forEach((callback) => callback?.())
+		unwatches = []
+		autoWatchStack.push((valueSet) => {
+			unwatches.push(valueSet.watch(cb, true))
+		})
+		callback()
+		autoWatchStack.pop()
+	}
+	cb()
+}
+
+/**
+ * @template T
+ * @param {() => Promise<{new (): T}> | {new (): T}} getComponent
+ * @return
+ */
+export async function makeComponent(getComponent) {
 	let component = await getComponent()
-	let options = await component(state)
+	return new component()
+}
+
+/**
+ * @param {{srcElement: Element, state: AugustState2}} param0
+ * @returns
+ */
+export function renderer({
+	srcElement = document.createElement("div"),
+	state,
+}) {
+	let options = state.renderOptions
 
 	let div = document.createElement("div")
 	div.innerHTML = options.html
@@ -189,9 +173,9 @@ export async function renderer({
 	return [_elements, _styleElement]
 }
 
-/** @type {AugustBinder[]} */
+/** @type {AugustBinder2[]} */
 let binders = []
-/** @type {(binder: AugustBinder) => void} */
+/** @type {(binder: AugustBinder2) => void} */
 export function addBinder({ regex, callback }) {
 	binders.push({ regex, callback })
 }
@@ -203,13 +187,20 @@ addBinder({
 		let [eventName, ...rest] = splitPath(camelize(eventDef))
 
 		element.addEventListener(eventName, (ev) => {
-			if (rest.length == 0) return state.set(attribute.value, ev)
-
+			if (rest.length == 0) {
+				// let vs = get(state, attribute.value)
+				// vs && (vs.value = ev)
+				set(state, attribute.value, ev)
+				return
+			}
+			
 			let v = get(ev, rest)
 			if (isFunction(v)) {
 				v.call(ev)
 			} else {
-				state.set(attribute.value, v)
+				// let vs = get(state, attribute.value)
+				// vs && (vs.value = v)
+				set(state, attribute.value, v)
 			}
 		})
 	},
@@ -219,7 +210,9 @@ addBinder({
 	regex: /\[prop\.(.*)\]/g,
 	callback: ({ element, attribute, match, state }) => {
 		let propertyName = camelize(match[1])
-		state.watch([`${attribute.value}?`], ([value]) => {
+
+		autoWatch(() => {
+			let value = get(state, attribute.value)
 			// sometimes undefined is printed out for text fields
 			// eg. input element value property
 			if (typeof element[propertyName] == "string" && isNil(value)) {
@@ -234,7 +227,8 @@ addBinder({
 	regex: /\[class\.(.*)\]/g,
 	callback: ({ element, attribute, match, state }) => {
 		let className = camelize(match[1])
-		state.watch([`${attribute.value}?`], ([value]) => {
+		autoWatch(() => {
+			let value = get(state, attribute.value)
 			if (value) {
 				element.classList.add(className)
 			} else {
@@ -248,7 +242,8 @@ addBinder({
 	regex: /\[attr\.(.*)\]/g,
 	callback: ({ element, attribute, match, state }) => {
 		let attributeName = match[1]
-		state.watch([`${attribute.value}?`], ([value]) => {
+		autoWatch(() => {
+			let value = get(state, attribute.value)
 			if (value) {
 				element.setAttribute(attributeName, value)
 			} else {
@@ -258,45 +253,17 @@ addBinder({
 	},
 })
 
-export class AugustComponent extends AugustState {
-	#getComponent
-	elements
-	styleElement
-	constructor(getComponent) {
-		super()
-		this.#getComponent = getComponent
-		this.elements = []
-	}
-
-	/** @type {AugustComponentRender} */
-	async render(srcElement) {
-		if (this.elements.length > 0) {
-			this.elements.forEach((el) => srcElement.appendChild(el))
-			if (this.styleElement) {
-				srcElement.appendChild(this.styleElement)
-			}
-			return
-		}
-		let [elements, styleElement] = await renderer({
-			getComponent: this.#getComponent,
-			srcElement,
-			state: this,
-		})
-		this.elements = elements
-		this.styleElement = styleElement
-	}
-}
-
 addBinder({
 	regex: /\[component\]/g,
 	callback: ({ element, attribute, match, state }) => {
 		let prevComponent
-		state.watch([`${attribute.value}?`], async ([component]) => {
+		autoWatch(() => {
+			let component = get(state, attribute.value)
 			if (prevComponent == component) return
 			prevComponent = component
 			element.innerHTML = ""
 			if (component) {
-				await component.render(element)
+				renderer({ srcElement: element, state: component })
 			}
 		})
 	},
@@ -305,9 +272,10 @@ addBinder({
 addBinder({
 	regex: /\[components\]/g,
 	callback: ({ element, attribute, match, state }) => {
-		state.getState()
 		let prevComponents = new Set()
-		state.watch([`${attribute.value}?`], async ([components]) => {
+		autoWatch(() => {
+			let components = get(state, attribute.value) ?? []
+			// Promise.all(componentspr).then((components) => {
 			if (!components) components = []
 			// prepare prevComponents for removing unwanted components
 			// removing all components that are there in current list
@@ -328,10 +296,11 @@ addBinder({
 			})
 			// render the current list of components
 			for (const component of components) {
-				await component.render(element)
+				renderer({ srcElement: element, state: component })
 			}
 			// finally set theem on prevComponents for next cycle
 			prevComponents = new Set(components)
+			// })
 		})
 	},
 })
