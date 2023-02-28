@@ -109,14 +109,16 @@ export function queueCallbacks(callbacks) {
 
 let autoWatchStack = []
 export function autoWatch(callback) {
-	let unwatches = []
+	let unsubscribeCallbacks = []
+	let unsubscribeFromAutoWatch
 	let cb = () => {
-		unwatches.forEach((callback) => callback?.())
-		unwatches = []
+		unsubscribeFromAutoWatch?.()
+		unsubscribeCallbacks.forEach((callback) => callback?.())
+		unsubscribeCallbacks = []
 		autoWatchStack.push((valueSet) => {
-			unwatches.push(valueSet.watch(cb, true))
+			unsubscribeCallbacks.push(valueSet.watch(cb, true))
 		})
-		callback()
+		unsubscribeFromAutoWatch = callback()
 		autoWatchStack.pop()
 	}
 	cb()
