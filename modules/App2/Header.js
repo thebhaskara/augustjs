@@ -20,6 +20,9 @@ export function Header() {
             (event.click)="clicked.value"
         >
             btn click</button>
+			<aug-button>
+				Hi There
+			</aug-button>
         </form>
         `,
 		css: "",

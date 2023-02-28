@@ -144,18 +144,25 @@ export function renderer({
 }) {
 	let options = state.renderOptions
 
+	/** @type {Element | ShadowRoot | null} */
+	let host = srcElement
+	if (options.shadow) {
+		srcElement.attachShadow({ mode: "open" })
+		host = srcElement.shadowRoot
+	}
 	let div = document.createElement("div")
 	div.innerHTML = options.html
 	let _elements = [...div.children]
 
 	div.querySelectorAll("*").forEach((element) => {
+		let isHost = element.tagName == "host" || element.hasAttribute("host")
 		let attributes = [...element.attributes]
 		attributes.forEach((attribute) => {
 			binders.forEach((binder) => {
 				let matches = [...attribute.name.matchAll(binder.regex)]
 				if (matches.length > 0) {
 					binder.callback({
-						element,
+						element: isHost ? srcElement : element,
 						attribute,
 						match: matches[0],
 						state,
@@ -163,6 +170,13 @@ export function renderer({
 				}
 			})
 		})
+		if (isHost) {
+			let children = [...element.children]
+			children.forEach((child) =>
+				element.parentElement?.appendChild(child)
+			)
+			element.remove()
+		}
 	})
 
 	let _styleElement = document.createElement("style")
@@ -170,7 +184,7 @@ export function renderer({
 	div.appendChild(_styleElement)
 
 	let els = [...div.children]
-	els.forEach((el) => srcElement.appendChild(el))
+	els.forEach((el) => host?.appendChild(el))
 
 	return [_elements, _styleElement]
 }
@@ -190,18 +204,14 @@ addBinder({
 
 		element.addEventListener(eventName, (ev) => {
 			if (rest.length == 0) {
-				// let vs = get(state, attribute.value)
-				// vs && (vs.value = ev)
 				set(state, attribute.value, ev)
 				return
 			}
-			
+
 			let v = get(ev, rest)
 			if (isFunction(v)) {
 				v.call(ev)
 			} else {
-				// let vs = get(state, attribute.value)
-				// vs && (vs.value = v)
 				set(state, attribute.value, v)
 			}
 		})
@@ -277,7 +287,6 @@ addBinder({
 		let prevComponents = new Set()
 		autoWatch(() => {
 			let components = get(state, attribute.value) ?? []
-			// Promise.all(componentspr).then((components) => {
 			if (!components) components = []
 			// prepare prevComponents for removing unwanted components
 			// removing all components that are there in current list
@@ -300,9 +309,8 @@ addBinder({
 			for (const component of components) {
 				renderer({ srcElement: element, state: component })
 			}
-			// finally set theem on prevComponents for next cycle
+			// finally set them on prevComponents for next cycle
 			prevComponents = new Set(components)
-			// })
 		})
 	},
 })

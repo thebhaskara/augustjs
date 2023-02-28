@@ -1,5 +1,6 @@
 // @ts-check
 import { prop, autoWatch, makeComponent, renderer } from "../lib/August2.mjs"
+import "./Button.js"
 
 const getHeader = async () => await (await import("./Header.js")).Header
 

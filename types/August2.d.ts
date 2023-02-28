@@ -55,6 +55,7 @@ interface AugustState2 {
 	renderOptions: {
 		html: string
 		css: string
+		shadow?: boolean
 	}
 }
 
